@@ -9,7 +9,7 @@ utils.opt = { batch_size = 16,
   epochs = 2,
   eval_batch_size = 256,
   eval_batch_size = 32,
-  eval_iters = 1000,
+  eval_iters = 5000,
   eval_train_iters = 1000,
   noise = 0.25,
   optimMethod = optim.sgd,
@@ -21,10 +21,10 @@ utils.opt = { batch_size = 16,
   }
 }
 
-
 utils.err = {any = false}
 
 utils.feval_counter = 0
+-- Requires model that takes a 32x32 input
 utils.feval = function (x)
   if utils.parameters ~= x then
     print("x and parameters are different tensors")
@@ -58,11 +58,53 @@ utils.feval = function (x)
   return minibatch.loss, utils.gradParameters
 end
 
+-- Requires model that takes a 24x24 input
+utils.feval_aug = function (x)
+  if utils.parameters ~= x then
+    print("x and parameters are different tensors")
+    utils.parameters:copy(x)
+  end
+  local noise = utils.opt.noise
+  local start_index = utils.feval_counter * utils.opt.batch_size +1
+  if start_index >= trainset:size() then
+      utils.feval_counter = 0
+      start_index = 1
+  end
+  local end_index = math.min((utils.feval_counter + 1)* utils.opt.batch_size, trainset.data:size(1))
+  if end_index == trainset.data:size(1) then
+    utils.feval_counter = 0;
+  else
+    utils.feval_counter = utils.feval_counter +1
+  end
+  local minibatch = {}
+  local raw_data = trainset.data[{{start_index,end_index}}]
+  minibatch.labels = trainset.label[{{start_index,end_index}}]
+  minibatch.data = torch.CudaTensor(utils.opt.batch_size, 3,24,24)
+  for i = 1, raw_data:size(1) do
+    local x1,x2,y1,y2
+    x1 = torch.random(1,8)
+    y1 = torch.random(1,8)
+    x2 = x1 + 23
+    y2 = y1 + 23
+    minibatch.data[i]:copy(raw_data[i][{{},{x1,x2},{y1,y2}}])
+  end
+  utils.net:zeroGradParameters()
+  utils.net:training()
+  minibatch.outputs = utils.net:forward(minibatch.data)
+  minibatch.loss = utils.criterion:forward(minibatch.outputs, minibatch.labels)
+  minibatch.dloss_doutput = utils.criterion:backward(minibatch.outputs,minibatch.labels)
+  utils.net:backward(minibatch.data,  minibatch.dloss_doutput)
+  if minibatch.loss ~= minibatch.loss or minibatch.loss == math.huge or minibatch.loss == -math.huge then
+    print("err: loss is " .. minibatch.loss)
+    utils.err.any = true
+  end
+  return minibatch.loss, utils.gradParameters
+end
+
 utils.evaluate = function (set)
-    --utils.net:training()
     utils.net:evaluate()
     local size = utils.opt.eval_iters
-    if size == 0 then size = set:size() end
+    if size == 0 or size > set:size() then size = set:size() end
     local minib_counter = 0
     local loss_acc = 0
     last_minibatch = false
@@ -89,7 +131,7 @@ utils.evaluate = function (set)
       _maxs, inds = minibatch.outputs:max(2)
       prediction_list[{{start_index, end_index}}] = inds[{{},1}]
     end
-    loss_acc = loss_acc/minib_counter
+    loss_acc = loss_acc/(minib_counter+1)
     local hist = torch.Tensor(10):zero()
     prediction_list:apply(function(x)
             hist[x] = hist[x] +1
@@ -108,9 +150,9 @@ utils.visualize_example = function (set, i)
   predicted:exp()
   local confidences, indices = torch.sort(predicted, true)
   for j = 1, predicted:size(1) do
-      print(classes[indices[j]], confidences[j])
+      print(classes[indices[j]], string.format("%.3f%%", confidences[j]*100))
+      sys.sleep(0.01)
   end
-  print("loss :", utils.criterion:forward(predicted, set.label[i]))
 end
 
 utils.visualize = function (n)

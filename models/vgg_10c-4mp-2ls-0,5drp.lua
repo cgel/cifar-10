@@ -21,10 +21,11 @@ end
 
 local dropRate = 0.5
 
-local view_size = convwidths[#convwidths] -- four pooling layers
---local view_size = convwidths[#convwidths] * 4 * 5 -- three pooling layers
+--local view_size = convwidths[#convwidths]         -- five pooling layers
+local view_size = convwidths[#convwidths] * 2 * 2 -- four layers
+--local view_size = convwidths[#convwidths] * 4 * 4 -- three pooling layers
 --local view_size = convwidths[#convwidths] * 8 * 8 -- two pooling layers
---local view_size = convwidths[#convwidths] * 16 * 16 -- one pooling layer
+--local view_size = convwidths[#convwidths] * 16* 16-- one pooling layer
 
 add_conv(1)
 add_conv(2)
@@ -48,7 +49,7 @@ net:add(nn.Dropout(dropRate))
 
 add_conv(7)
 add_conv(8)
-net:add(nn.SpatialMaxPooling(2,2,2,2))
+--net:add(nn.SpatialMaxPooling(2,2,2,2))
 net:add(nn.Dropout(dropRate))
 
 net:add(nn.View(view_size))
