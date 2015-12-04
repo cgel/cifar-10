@@ -165,20 +165,32 @@ end
 
 utils.error_rate = function(set)
   utils.net:evaluate()
-  --n:training()
-  correct = 0
-  local t_size = set:size()
-  local av_size = 3
-  for i = 1, t_size do
-    local groundtruth = set.label[i]
-    local prediction = torch.Tensor(10):cuda():zero()
-    local prediction = utils.net:forward(set.data[i])
-    local confidences, indices = torch.sort(prediction, true)
-    if groundtruth == indices[1] then
+  local correct = 0
+  local batch_size = 256
+  local size = testset:size()
+  local count = 0
+  for i = 0, math.ceil(size/batch_size) do
+    local start_index = count * batch_size + 1
+    if start_index >= size then
+      count = 0
+      start_index = 1
+    end
+    local end_index = math.min( start_index + batch_size, size)
+    count = count + 1
+    local minibatch = {}
+    minibatch.data = trainset.data[{{start_index,end_index}}]
+    minibatch.labels = trainset.label[{{start_index,end_index}}]
+    minibatch.outputs = utils.net:forward(minibatch.data)
+    for j = 1, minibatch.data:size(1) do
+      local groundtruth = minibatch.labels[j]
+      local prediction = minibatch.outputs[j]
+      local confidences, indices = torch.sort(prediction, true)
+      if groundtruth == indices[1] then
         correct = correct +1
+      end
     end
   end
-  percent = 100 * correct/t_size
+  percent = 100 * correct/size
   print("testset ", percent,'%')
 end
 
