@@ -59,7 +59,7 @@ utils.feval = function (x)
 end
 
 -- Requires model that takes a 24x24 input
-utils.feval_aug = function (x)
+utils.feval_24 = function (x)
   if utils.parameters ~= x then
     print("x and parameters are different tensors")
     utils.parameters:copy(x)
