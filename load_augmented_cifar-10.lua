@@ -7,20 +7,15 @@ local function generate_augmented_trainset()
   trainset:float()
   local augmented_data = torch.Tensor(trainset:size()*6, 3, 32, 32)
   local augmented_label = torch.Tensor(trainset:size()*6)
+  local shuffle = torch.randperm(trainset:size()*6)
   for i=0,trainset:size()-1 do
-  augmented_data[i*5+1] = image.scale(trainset.data[i+1][{{},{4,28},{4,28}}],32,32)
-  augmented_data[i*5+2] = image.scale(trainset.data[i+1][{{},{1,24},{8,32}}],32,32)
-  augmented_data[i*5+3] = image.scale(trainset.data[i+1][{{},{1,24},{1,24}}],32,32)
-  augmented_data[i*5+4] = image.scale(trainset.data[i+1][{{},{8,32},{8,32}}],32,32)
-  augmented_data[i*5+5] = image.scale(trainset.data[i+1][{{},{8,32},{1,24}}],32,32)
-  augmented_label[i*5+1] = trainset.label[i+1]
-  augmented_label[i*5+2] = trainset.label[i+1]
-  augmented_label[i*5+3] = trainset.label[i+1]
-  augmented_label[i*5+4] = trainset.label[i+1]
-  augmented_label[i*5+5] = trainset.label[i+1]
+    for j=1,5 do
+      augmented_data[shuffle[i*6+j]] = image.scale(trainset.data[i+1][{{},{4,28},{4,28}}],32,32)
+      augmented_label[shuffle[i*6+j]] = trainset.label[i+1]
+    end
+    augmented_data[shuffle[i*6+6]] = trainset.data[i+1]
+    augmented_label[shuffle[i*6+6]] = trainset.label[i+1]
   end
-  augmented_data[{{trainset:size()*5 +1, trainset:size()*6}}] = trainset.data
-  augmented_label[{{trainset:size()*5 +1, trainset:size()*6}}] = trainset.label
   torch.save("data/augmented_cifar_10_trainset", {augmented_data=augmented_data, augmented_label=augmented_label})
   return augmented_data, augmented_label
 end
