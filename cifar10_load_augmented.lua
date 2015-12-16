@@ -1,6 +1,6 @@
 local image = require "image"
 require "Set"
-local cifar_10 = require("load_cifar-10")
+local cifar_10 = require("cifar10_load")
 -- out of every example of the trainset will make 5 extra: center, right-top, left-top, right-bottom, left-bottom
 local function generate_augmented_trainset()
   trainset = cifar_10.trainset
@@ -8,9 +8,17 @@ local function generate_augmented_trainset()
   local augmented_data = torch.Tensor(trainset:size()*6, 3, 32, 32)
   local augmented_label = torch.Tensor(trainset:size()*6)
   local shuffle = torch.randperm(trainset:size()*6)
+  local crop = 24
+  local d = math.ceil((33-crop)/2)
+  local crops = { {{1, crop},{1, crop}},
+                  {{1, crop}, {33 - crop, 32}},
+                  {{33 - crop, 32}, {1, crop, 32}},
+                  {{33 - crop, 32}, {33 - crop, 32}},
+                  {{d, 33 - d}, {d, 33 - d}},
+                }
   for i=0,trainset:size()-1 do
     for j=1,5 do
-      augmented_data[shuffle[i*6+j]] = image.scale(trainset.data[i+1][{{},{4,28},{4,28}}],32,32)
+      augmented_data[shuffle[i*6+j]] = image.scale(trainset.data[i+1][{{},crops[j][1],crops[j][2]}],32,32)
       augmented_label[shuffle[i*6+j]] = trainset.label[i+1]
     end
     augmented_data[shuffle[i*6+6]] = trainset.data[i+1]

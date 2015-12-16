@@ -150,8 +150,7 @@ utils.visualize_example = function (set, i)
   predicted:exp()
   local confidences, indices = torch.sort(predicted, true)
   for j = 1, predicted:size(1) do
-      print(classes[indices[j]], string.format("%.3f%%", confidences[j]*100))
-      sys.sleep(0.01)
+      print(classes[indices[j]]..string.format("    %.3f%%", confidences[j]*100))
   end
 end
 
