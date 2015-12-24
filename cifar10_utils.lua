@@ -2,7 +2,7 @@ require "optim"
 require "image"
 utils = {}
 
-utils.opt = { batch_size = 16,
+utils.opt = { batch_size = 64,
   cuda = true,
 --opt.train_size = 60000,
   test_size = 0,
