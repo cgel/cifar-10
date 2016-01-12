@@ -1,4 +1,3 @@
-require "cunn"
 require "Set"
 
 DATA = torch.load("data/train_x.bin")

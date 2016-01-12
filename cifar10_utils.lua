@@ -3,7 +3,7 @@ require "image"
 utils = {}
 
 utils.opt = { batch_size = 64,
-  cuda = true,
+cuda = true,
 --opt.train_size = 60000,
   test_size = 0,
   epochs = 2,
@@ -24,111 +24,84 @@ utils.opt = { batch_size = 64,
 utils.err = {any = false}
 
 utils.feval_counter = 0
--- Requires model that takes a 32x32 input
-utils.feval = function (x)
-  if utils.parameters ~= x then
-    print("x and parameters are different tensors")
-    utils.parameters:copy(x)
-  end
-  local noise = utils.opt.noise
-  local start_index = utils.feval_counter * utils.opt.batch_size +1
-  if start_index >= trainset:size() then
-      utils.feval_counter = 0
-      start_index = 1
-  end
-  local end_index = math.min((utils.feval_counter + 1)* utils.opt.batch_size, trainset.data:size(1))
-  if end_index == trainset.data:size(1) then
-    utils.feval_counter = 0;
-  else
-    utils.feval_counter = utils.feval_counter +1
-  end
-  local minibatch = {}
-  minibatch.data = trainset.data[{{start_index,end_index}}]
-  minibatch.labels = trainset.label[{{start_index,end_index}}]
-  utils.net:zeroGradParameters()
-  utils.net:training()
-  minibatch.outputs = utils.net:forward(minibatch.data)
-  minibatch.loss = utils.criterion:forward(minibatch.outputs, minibatch.labels)
-  minibatch.dloss_doutput = utils.criterion:backward(minibatch.outputs,minibatch.labels)
-  utils.net:backward(minibatch.data,  minibatch.dloss_doutput)
-  if minibatch.loss ~= minibatch.loss or minibatch.loss == math.huge or minibatch.loss == -math.huge then
-    print("err: loss is " .. minibatch.loss)
-    utils.err.any = true
-  end
-  return minibatch.loss, utils.gradParameters
+
+utils.augment = function(self, minibatch)
+    for i = 1, minibatch:size(1) do
+      if torch.rand(1)[1] > 0.5 then image.hflip(minibatch[i], minibatch[i]) end
+    end
+    return minibatch
 end
 
--- Requires model that takes a 24x24 input
-utils.feval_24 = function (x)
-  if utils.parameters ~= x then
-    print("x and parameters are different tensors")
-    utils.parameters:copy(x)
-  end
-  local noise = utils.opt.noise
-  local start_index = utils.feval_counter * utils.opt.batch_size +1
-  if start_index >= trainset:size() then
-      utils.feval_counter = 0
-      start_index = 1
-  end
-  local end_index = math.min((utils.feval_counter + 1)* utils.opt.batch_size, trainset.data:size(1))
-  if end_index == trainset.data:size(1) then
-    utils.feval_counter = 0;
-  else
-    utils.feval_counter = utils.feval_counter +1
-  end
-  local minibatch = {}
-  local raw_data = trainset.data[{{start_index,end_index}}]
-  minibatch.labels = trainset.label[{{start_index,end_index}}]
-  minibatch.data = torch.CudaTensor(utils.opt.batch_size, 3,24,24)
-  for i = 1, raw_data:size(1) do
-    local x1,x2,y1,y2
-    x1 = torch.random(1,8)
-    y1 = torch.random(1,8)
-    x2 = x1 + 23
-    y2 = y1 + 23
-    minibatch.data[i]:copy(raw_data[i][{{},{x1,x2},{y1,y2}}])
-  end
-  utils.net:zeroGradParameters()
+utils.train_epoch = function(self)
   utils.net:training()
-  minibatch.outputs = utils.net:forward(minibatch.data)
-  minibatch.loss = utils.criterion:forward(minibatch.outputs, minibatch.labels)
-  minibatch.dloss_doutput = utils.criterion:backward(minibatch.outputs,minibatch.labels)
-  utils.net:backward(minibatch.data,  minibatch.dloss_doutput)
-  if minibatch.loss ~= minibatch.loss or minibatch.loss == math.huge or minibatch.loss == -math.huge then
-    print("err: loss is " .. minibatch.loss)
-    utils.err.any = true
+  local last_iter = false
+  local minibatch = {}
+  minibatch.data = torch.CudaTensor(self.opt.batch_size, 3, 32, 32)
+  minibatch.labels= torch.CudaTensor(self.opt.batch_size)
+  local counter = 0
+  while last_iter == false do
+    local start_index = math.min(counter * utils.opt.batch_size + 1, trainset.data:size(1))
+    local end_index = math.min((counter + 1)* utils.opt.batch_size, trainset.data:size(1))
+    if end_index >= trainset:size() then
+      last_iter = true
+    end
+    counter = counter + 1
+    augmented = self:augment(trainset.data[{{start_index, end_index}}])
+    minibatch.data[{{1, end_index - start_index + 1}}]:copy(augmented) -- now in gpu mem
+    minibatch.labels:copy(trainset.label[{{start_index, end_index}}])
+
+    local feval = function (x)
+      if utils.parameters ~= x then
+        print("x and parameters are different tensors")
+        utils.parameters:copy(x)
+      end
+      utils.net:zeroGradParameters()
+      minibatch.outputs = utils.net:forward(minibatch.data)
+      minibatch.loss = utils.criterion:forward(minibatch.outputs, minibatch.labels)
+      minibatch.dloss_doutput = utils.criterion:backward(minibatch.outputs, minibatch.labels)
+      utils.net:backward(minibatch.data,  minibatch.dloss_doutput)
+      if minibatch.loss == math.huge or minibatch.loss == -math.huge then
+        print("err: loss is " .. minibatch.loss)
+        last_iter = true
+      end
+      return bm_loss, utils.gradParameters
+    end
+    utils.opt.optimMethod(feval, utils.parameters, utils.opt.optimState)
   end
-  return minibatch.loss, utils.gradParameters
 end
 
-utils.evaluate = function (set)
-    utils.net:evaluate()
-    local size = utils.opt.eval_iters
-    if size == 0 or size > set:size() then size = set:size() end
+utils.evaluate = function (self, set)
+    self.net:evaluate()
+    local size = set:size()
     local minib_counter = 0
     local loss_acc = 0
-    last_minibatch = false
-    if utils.opt.cuda then
-      prediction_list = torch.Tensor(size):cuda()
-    else
-      prediction_list = torch.Tensor(size)
-    end
+    local last_minibatch = false
+    local prediction_list = torch.Tensor(size):cuda()
     local minibatch = {}
+    local correct_count = 0
     while(last_minibatch ~= true) do
-      local start_index = minib_counter * utils.opt.eval_batch_size +1
-      local end_index = math.min((minib_counter + 1)* utils.opt.eval_batch_size, size)
+      local start_index = minib_counter * self.opt.eval_batch_size +1
+      local end_index = math.min((minib_counter + 1)* self.opt.eval_batch_size, size)
        if end_index == size then
         last_minibatch = true
         else
         minib_counter = minib_counter +1
       end
-      minibatch.data = set.data[{{start_index,end_index}}]
-      minibatch.labels = set.label[{{start_index,end_index}}]
+      minibatch.data = set.data[{{start_index,end_index}}]:cuda()
+      minibatch.labels = set.label[{{start_index,end_index}}]:cuda()
       utils.net:zeroGradParameters()
-      minibatch.outputs = utils.net:forward(minibatch.data)
-      minibatch.loss = utils.criterion:forward(minibatch.outputs, minibatch.labels)
+      minibatch.outputs = self.net:forward(minibatch.data)
+      minibatch.loss = self.criterion:forward(minibatch.outputs, minibatch.labels)
+      for j = 1, minibatch.data:size(1) do
+        local groundtruth = minibatch.labels[j]
+        local prediction = minibatch.outputs[j]
+        local confidences, indices = torch.sort(prediction, true)
+        if groundtruth == indices[1] then
+          correct_count = correct_count +1
+        end
+      end
       loss_acc = loss_acc + minibatch.loss
-      _maxs, inds = minibatch.outputs:max(2)
+      local _maxs, inds = minibatch.outputs:max(2)
       prediction_list[{{start_index, end_index}}] = inds[{{},1}]
     end
     loss_acc = loss_acc/(minib_counter+1)
@@ -136,11 +109,8 @@ utils.evaluate = function (set)
     prediction_list:apply(function(x)
             hist[x] = hist[x] +1
         end)
-    return loss_acc, hist
-end
-
-utils.update  = function ()
-  return utils.opt.optimMethod(utils.feval,utils.parameters, utils.opt.optimState)
+    local error_rate = 100 - 100 * correct_count/size
+    return loss_acc, hist, error_rate
 end
 
 utils.visualize_example = function (set, i)
@@ -162,36 +132,6 @@ utils.visualize = function (n)
   end
 end
 
-utils.error_rate = function(set)
-  utils.net:evaluate()
-  local correct = 0
-  local batch_size = 256
-  local size = testset:size()
-  local count = 0
-  for i = 0, math.ceil(size/batch_size) - 1 do
-    local start_index = count * batch_size + 1
-    if start_index >= size then
-      count = 0
-      start_index = 1
-    end
-    local end_index = math.min( start_index + batch_size - 1, size)
-    count = count + 1
-    local minibatch = {}
-    minibatch.data = set.data[{{start_index,end_index}}]
-    minibatch.labels = set.label[{{start_index,end_index}}]
-    minibatch.outputs = utils.net:forward(minibatch.data)
-    for j = 1, minibatch.data:size(1) do
-      local groundtruth = minibatch.labels[j]
-      local prediction = minibatch.outputs[j]
-      local confidences, indices = torch.sort(prediction, true)
-      if groundtruth == indices[1] then
-        correct = correct +1
-      end
-    end
-  end
-  percent = 100 * correct/size
-  print("testset ", percent,'%')
-end
 
 utils.class_error = function(set)
   local class_perf = {0,0,0,0,0,0,0,0,0,0}
