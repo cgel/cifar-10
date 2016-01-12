@@ -25,6 +25,7 @@ utils.err = {any = false}
 
 utils.feval_counter = 0
 
+-- Modifies the minibatch passed. Therfor pass only a copy of the trainset
 utils.augment = function(self, minibatch)
     for i = 1, minibatch:size(1) do
       if torch.rand(1)[1] > 0.5 then image.hflip(minibatch[i], minibatch[i]) end
@@ -116,7 +117,7 @@ end
 utils.visualize_example = function (set, i)
   print(classes[set.label[i]])
   itorch.image(set.data[i])
-  local predicted = utils.net:forward(set.data[i])
+  local predicted = utils.net:forward(set.data[i]:cuda())
   predicted:exp()
   local confidences, indices = torch.sort(predicted, true)
   for j = 1, predicted:size(1) do
