@@ -25,12 +25,18 @@ utils.err = {any = false}
 
 utils.feval_counter = 0
 
--- Modifies the minibatch passed. Therfor pass only a copy of the trainset
 utils.augment = function(self, minibatch)
-    for i = 1, minibatch:size(1) do
-      if torch.rand(1)[1] > 0.5 then image.hflip(minibatch[i], minibatch[i]) end
-    end
-    return minibatch
+  augmented = torch.FloatTensor(minibatch:size())
+  for i = 1, minibatch:size(1) do
+    local crop_size = torch.random(1,5)
+    local x = torch.random(1, crop_size)
+    local y = torch.random(1, crop_size)
+    local x_crop = {x , 32 - crop_size + x}
+    local y_crop = {y, 32 - crop_size + y}
+    augmented[i] = image.scale(minibatch[i][{{}, x_crop, y_crop}],32,32)
+    if torch.rand(1)[1] > 0.5 then image.hflip(augmented[i], augmented[i]) end
+  end
+  return augmented
 end
 
 utils.train_epoch = function(self)
