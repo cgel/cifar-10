@@ -139,7 +139,7 @@ utils.evaluate = function (self, set)
     prediction_list:apply(function(x)
             hist[x] = hist[x] +1
         end)
-    local error_rate = 100 - 100 * correct_count/size
+    local error_rate = 1 - correct_count/size
     return loss_acc, hist, error_rate
 end
 
