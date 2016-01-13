@@ -25,7 +25,28 @@ utils.err = {any = false}
 
 utils.feval_counter = 0
 
-utils.augment = function(self, minibatch)
+-- different data augmentation methods
+utils.flip_augment = function(self, minibatch)
+  --augmented = torch.FloatTensor(minibatch:size())
+  for i = 1, minibatch:size(1) do
+    if torch.rand(1)[1] > 0.5 then image.hflip(augmented[i], minibatch[i]) end
+  end
+  return augmented
+end
+utils.crop5_flip_augment = function(self, minibatch)
+  augmented = torch.FloatTensor(minibatch:size())
+  for i = 1, minibatch:size(1) do
+    local crop_size = 5
+    local x = torch.random(1, crop_size)
+    local y = torch.random(1, crop_size)
+    local x_crop = {x , 32 - crop_size + x}
+    local y_crop = {y, 32 - crop_size + y}
+    augmented[i] = image.scale(minibatch[i][{{}, x_crop, y_crop}],32,32)
+    if torch.rand(1)[1] > 0.5 then image.hflip(augmented[i], augmented[i]) end
+  end
+  return augmented
+end
+utils.rand_crop_flip_augment = function(self, minibatch)
   augmented = torch.FloatTensor(minibatch:size())
   for i = 1, minibatch:size(1) do
     local crop_size = torch.random(1,5)
@@ -38,6 +59,8 @@ utils.augment = function(self, minibatch)
   end
   return augmented
 end
+-- choose the data augmentation function to call
+utils.augment = utils.rand_crop_flip_augment
 
 utils.train_epoch = function(self)
   utils.net:training()
@@ -120,9 +143,9 @@ utils.evaluate = function (self, set)
     return loss_acc, hist, error_rate
 end
 
-utils.visualize_example = function (set, i)
+utils.visualize_example = function (self, set, i)
   print(classes[set.label[i]])
-  itorch.image(set.data[i])
+  itorch.image(image.scale(set.data[i],90,90))
   local predicted = utils.net:forward(set.data[i]:cuda())
   predicted:exp()
   local confidences, indices = torch.sort(predicted, true)
@@ -131,11 +154,11 @@ utils.visualize_example = function (set, i)
   end
 end
 
-utils.visualize = function (n)
+utils.visualize = function (self, i)
   utils.net:evaluate()
   for i = 1, n do
     print("=======")
-    utils.visualize_example(testset, math.ceil(torch.uniform(1,testset:size())))
+    utils:visualize_example(testset, math.ceil(torch.uniform(1,testset:size())))
   end
 end
 
@@ -156,5 +179,10 @@ utils.class_error = function(set)
     print(classes[i], 1000*sorted_perf[i]/t_size..' %')
   end
 end
+
+utils.ping = function(self)
+  os.execute("mpg123 ~/workspace/SVHN_torch/sounds/ping.mp3 &")
+end
+
 
 return utils
