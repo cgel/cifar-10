@@ -46,6 +46,22 @@ utils.crop5_flip_augment = function(self, minibatch)
   end
   return augmented
 end
+utils.edge_crop_flip_augment = function(self, minibatch)
+  augmented = torch.FloatTensor(minibatch:size())
+  for i = 1, minibatch:size(1) do
+    local crop_size = 26
+    local crops = { {{1, crop_size},{1, crop_size}},
+                  {{1, crop_size}, {33 - crop_size, 32}},
+                  {{33 - crop_size, 32}, {1, crop_size, 32}},
+                  {{33 - crop_size, 32}, {33 - crop_size, 32}},
+                  {{(33-crop_size)/2, 33 - (33-crop_size)/2}, {(33-crop_size)/2, 33 - (33-crop_size)/2}}
+                }
+    local n = torch.random(1,5)
+    augmented[i] = image.scale(minibatch[i][{{},crops[n][1],crops[n][2]}],32,32)
+    if torch.rand(1)[1] > 0.5 then image.hflip(augmented[i], augmented[i]) end
+  end
+  return augmented
+end
 utils.rand_crop_flip_augment = function(self, minibatch)
   augmented = torch.FloatTensor(minibatch:size())
   for i = 1, minibatch:size(1) do
