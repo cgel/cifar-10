@@ -8,7 +8,6 @@ cuda = true,
   test_size = 0,
   epochs = 2,
   eval_batch_size = 256,
-  eval_batch_size = 32,
   eval_iters = 5000,
   eval_train_iters = 1000,
   noise = 0.25,
@@ -85,6 +84,7 @@ utils.train_epoch = function(self)
   minibatch.data = torch.CudaTensor(self.opt.batch_size, 3, 32, 32)
   minibatch.labels= torch.CudaTensor(self.opt.batch_size)
   local counter = 0
+  local epoch_loss = 0
   while last_iter == false do
     local start_index = math.min(counter * utils.opt.batch_size + 1, trainset.data:size(1))
     local end_index = math.min((counter + 1)* utils.opt.batch_size, trainset.data:size(1))
@@ -110,10 +110,12 @@ utils.train_epoch = function(self)
         print("err: loss is " .. minibatch.loss)
         last_iter = true
       end
+      epoch_loss = epoch_loss + minibatch.loss
       return bm_loss, utils.gradParameters
     end
     utils.opt.optimMethod(feval, utils.parameters, utils.opt.optimState)
   end
+  return epoch_loss/counter
 end
 
 utils.evaluate = function (self, set)
@@ -135,7 +137,6 @@ utils.evaluate = function (self, set)
       end
       minibatch.data = set.data[{{start_index,end_index}}]:cuda()
       minibatch.labels = set.label[{{start_index,end_index}}]:cuda()
-      utils.net:zeroGradParameters()
       minibatch.outputs = self.net:forward(minibatch.data)
       minibatch.loss = self.criterion:forward(minibatch.outputs, minibatch.labels)
       for j = 1, minibatch.data:size(1) do
