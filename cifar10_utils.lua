@@ -74,8 +74,13 @@ utils.rand_crop_flip_augment = function(self, minibatch)
   end
   return augmented
 end
--- choose the data augmentation function to call
-utils.augment = utils.rand_crop_flip_augment
+utils.no_augment = function(self, minibatch)
+  return minibatch
+end
+utils.augment = function(self)
+  print("error: no augment method defined")
+end
+
 
 utils.train_epoch = function(self)
   utils.net:training()
@@ -114,6 +119,9 @@ utils.train_epoch = function(self)
       return bm_loss, utils.gradParameters
     end
     utils.opt.optimMethod(feval, utils.parameters, utils.opt.optimState)
+    if(self.net:name() == "DataParallelTable") then
+      self.net:syncParameters()
+    end
   end
   return epoch_loss/counter
 end
@@ -171,7 +179,7 @@ utils.visualize_example = function (self, set, i)
   end
 end
 
-utils.visualize = function (self, i)
+utils.visualize = function (self, n)
   utils.net:evaluate()
   for i = 1, n do
     print("=======")
