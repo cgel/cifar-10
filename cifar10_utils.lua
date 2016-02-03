@@ -119,7 +119,8 @@ utils.train_epoch = function(self)
       return bm_loss, utils.gradParameters
     end
     utils.opt.optimMethod(feval, utils.parameters, utils.opt.optimState)
-    if(self.net:name() == "DataParallelTable") then
+    -- DataParallelTable return true
+    if(self.net.name ~= nil and self.net:name() == "DataParallelTable") then
       self.net:syncParameters()
     end
   end
